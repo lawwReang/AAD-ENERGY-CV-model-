@@ -1,0 +1,7 @@
+{
+  "name": "Smart MCB Command Center",
+  "description": "High-end industrial electrical safety and facility physical security command center with real-time MCB telemetry and computer vision monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
