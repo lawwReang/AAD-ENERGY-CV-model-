@@ -1,89 +1,149 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  EnvironmentData, 
-  SecurityStatus, 
-  McbDevice, 
-  AlertEvent, 
-  SystemHealthItem, 
-  ElectricalReading, 
-  FacilitySettings 
-} from '../types';
-import { 
-  environment as initialEnv, 
-  security as initialSec, 
-  devices as initialDevices, 
-  alerts as initialAlerts, 
-  systemHealth as initialHealth, 
-  electricalMetrics as initialElec, 
+import React, { useEffect, useState } from "react";
+import {
+  EnvironmentData,
+  SecurityStatus,
+  McbDevice,
+  AlertEvent,
+  SystemHealthItem,
+  ElectricalReading,
+  FacilitySettings,
+} from "../types";
+
+import {
+  environment as initialEnv,
+  security as initialSec,
+  devices as initialDevices,
+  alerts as initialAlerts,
+  systemHealth as initialHealth,
+  electricalMetrics as initialElec,
   defaultSettings,
-  historicalSensorData 
-} from '../data/mockData';
+} from "../data/mockData";
+
+import {
+  fetchEnvironmentTelemetry,
+  fetchEmergencyStatus,
+  clearEmergency,
+  fetchSecurityTelemetry,
+  triggerManualSOS,
+} from "../services/api";
 
 // Components
-import { TopCommandBar } from '../components/command/TopCommandBar';
-import { LeftNavigation, NavSection } from '../components/command/LeftNavigation';
-import { SystemHealthStrip } from '../components/command/SystemHealthStrip';
-import { CameraViewport } from '../components/security/CameraViewport';
-import { CameraDetailsPanel } from '../components/security/CameraDetailsPanel';
-import { DetectionHud } from '../components/security/DetectionHud';
-import { TheftProtectionPanel } from '../components/security/TheftProtectionPanel';
-import { EnvironmentalCore } from '../components/environment/EnvironmentalCore';
-import { LiveSensorGraph } from '../components/environment/LiveSensorGraph';
-import { McbNetworkTopology } from '../components/devices/McbNetworkTopology';
-import { ElectricalMetrics } from '../components/devices/ElectricalMetrics';
-import { AlertStream } from '../components/alerts/AlertStream';
-import { EmergencyControlPanel } from '../components/emergency/EmergencyControlPanel';
-import { ExtinguisherModal } from '../components/emergency/ExtinguisherModal';
-import { CriticalAlertBanner } from '../components/emergency/CriticalAlertBanner';
-import { SettingsModal } from '../components/settings/SettingsModal';
-import { SimulationBar, DemoScenario } from '../components/common/SimulationBar';
+import { TopCommandBar } from "../components/command/TopCommandBar";
+import {
+  LeftNavigation,
+  NavSection,
+} from "../components/command/LeftNavigation";
+import { SystemHealthStrip } from "../components/command/SystemHealthStrip";
+
+import { CameraViewport } from "../components/security/CameraViewport";
+import { CameraDetailsPanel } from "../components/security/CameraDetailsPanel";
+import { DetectionHud } from "../components/security/DetectionHud";
+import { TheftProtectionPanel } from "../components/security/TheftProtectionPanel";
+
+import { EnvironmentalCore } from "../components/environment/EnvironmentalCore";
+import { LiveSensorGraph } from "../components/environment/LiveSensorGraph";
+
+import { McbNetworkTopology } from "../components/devices/McbNetworkTopology";
+import { ElectricalMetrics } from "../components/devices/ElectricalMetrics";
+
+import { AlertStream } from "../components/alerts/AlertStream";
+
+import { EmergencyControlPanel } from "../components/emergency/EmergencyControlPanel";
+import { ExtinguisherModal } from "../components/emergency/ExtinguisherModal";
+import { CriticalAlertBanner } from "../components/emergency/CriticalAlertBanner";
+
+import { SettingsModal } from "../components/settings/SettingsModal";
 
 export const Dashboard: React.FC = () => {
-  // Primary States
-  const [envData, setEnvData] = useState<EnvironmentData>({ ...initialEnv });
-  const [securityData, setSecurityData] = useState<SecurityStatus>({ ...initialSec });
-  const [mcbDevices, setMcbDevices] = useState<McbDevice[]>([...initialDevices]);
+  // ---------------------------------------------------------------------------
+  // DATA STATE
+  // ---------------------------------------------------------------------------
+
+  const [envData, setEnvData] = useState<EnvironmentData>({
+    ...initialEnv,
+  });
+
+  const [securityData, setSecurityData] = useState<SecurityStatus>({
+    ...initialSec,
+  });
+
+  const [mcbDevices] = useState<McbDevice[]>([...initialDevices]);
+
   const [eventLogs, setEventLogs] = useState<AlertEvent[]>([...initialAlerts]);
-  const [healthItems, setHealthItems] = useState<SystemHealthItem[]>([...initialHealth]);
-  const [powerMetrics, setPowerMetrics] = useState<ElectricalReading>({ ...initialElec });
-  const [settings, setSettings] = useState<FacilitySettings>({ ...defaultSettings });
-  const [sensorHistory, setSensorHistory] = useState([...historicalSensorData]);
 
-  // UI Navigation & Modals
-  const [activeNav, setActiveNav] = useState<NavSection>('overview');
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isExtinguisherModalOpen, setIsExtinguisherModalOpen] = useState<boolean>(false);
-  const [extinguisherDischarged, setExtinguisherDischarged] = useState<boolean>(false);
+  const [healthItems] = useState<SystemHealthItem[]>([...initialHealth]);
 
-  // Camera Optical & Feed Controls State
-  const [activeCam, setActiveCam] = useState<string>('CAM-01');
-  const [nightVision, setNightVision] = useState<boolean>(false);
-  const [thermalMode, setThermalMode] = useState<boolean>(false);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [powerMetrics] = useState<ElectricalReading>({
+    ...initialElec,
+  });
 
-  const handleToggleNightVision = () => {
-    setNightVision(prev => {
-      const next = !prev;
-      if (next) setThermalMode(false);
-      return next;
-    });
-  };
+  const [settings, setSettings] = useState<FacilitySettings>({
+    ...defaultSettings,
+  });
 
-  const handleToggleThermalMode = () => {
-    setThermalMode(prev => {
-      const next = !prev;
-      if (next) setNightVision(false);
-      return next;
-    });
-  };
+  // Real sensor history will be populated once backend history storage exists.
+  const [sensorHistory] = useState<
+    Array<{
+      time: string;
+      temp: number;
+      humidity: number;
+      gas: number;
+    }>
+  >([]);
 
-  const handleCycleZoom = () => {
-    setZoomLevel(prev => (prev === 1 ? 1.5 : prev === 1.5 ? 2.0 : 1));
-  };
+  // ---------------------------------------------------------------------------
+  // SENSOR CONNECTION STATE
+  // ---------------------------------------------------------------------------
 
-  // Emergency & Simulation Scenario State
-  const [activeScenario, setActiveScenario] = useState<DemoScenario>('NOMINAL');
-  const [isEmergencyActive, setIsEmergencyActive] = useState<boolean>(false);
+  const [sensorConnected, setSensorConnected] = useState(false);
+  const [sensorLoading, setSensorLoading] = useState(true);
+  const [sensorError, setSensorError] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // BACKEND SOS STATE
+  // ---------------------------------------------------------------------------
+
+  const [sosActive, setSosActive] = useState(false);
+
+  const [sosDetails, setSosDetails] = useState<{
+    type: "AUTOMATIC" | "MANUAL";
+    reason: string;
+    device_id: string;
+    sensor: string;
+    value: number;
+    triggered_at: string;
+  } | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // UI STATE
+  // ---------------------------------------------------------------------------
+
+  const [activeNav, setActiveNav] = useState<NavSection>("overview");
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [isExtinguisherModalOpen, setIsExtinguisherModalOpen] = useState(false);
+
+  const [extinguisherDischarged, setExtinguisherDischarged] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // CAMERA STATE
+  // ---------------------------------------------------------------------------
+
+  const [activeCam, setActiveCam] = useState("CAM-01");
+
+  const [nightVision, setNightVision] = useState(false);
+
+  const [thermalMode, setThermalMode] = useState(false);
+
+  const [zoomLevel, setZoomLevel] = useState(1);
+
+  // ---------------------------------------------------------------------------
+  // EMERGENCY UI STATE
+  // ---------------------------------------------------------------------------
+
+  const [isEmergencyActive, setIsEmergencyActive] = useState(false);
+
   const [criticalBanner, setCriticalBanner] = useState<{
     show: boolean;
     title: string;
@@ -92,40 +152,201 @@ export const Dashboard: React.FC = () => {
     details?: string;
   } | null>(null);
 
-  // Subtle live sensor fluctuation timer for realism
+  // ---------------------------------------------------------------------------
+  // LIVE SENSOR + EMERGENCY POLLING
+  // ---------------------------------------------------------------------------
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Small jitter around current temperature & gas if not in overridden crisis
-      if (activeScenario === 'NOMINAL') {
-        setEnvData((prev) => {
-          const jitterTemp = Number((38.2 + Math.random() * 0.5).toFixed(1));
-          const jitterGas = Number((21.0 + Math.random() * 0.8).toFixed(1));
-          const jitterHum = Number((48.0 + Math.random() * 0.6).toFixed(1));
-          return {
-            ...prev,
-            temperature: jitterTemp,
-            gas: jitterGas,
-            humidity: jitterHum,
-          };
-        });
+    let isMounted = true;
 
-        // Electrical load subtle jitter
-        setPowerMetrics((prev) => ({
-          ...prev,
-          voltage: Number((231.0 + Math.random() * 0.8).toFixed(1)),
-          current: Number((4.75 + Math.random() * 0.15).toFixed(2)),
-          power: Number((1.10 + Math.random() * 0.03).toFixed(2)),
-        }));
+    // -------------------------------------------------------------------------
+    // ENVIRONMENT TELEMETRY
+    // -------------------------------------------------------------------------
+
+    const loadEnvironmentTelemetry = async () => {
+      try {
+        const telemetry = await fetchEnvironmentTelemetry();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setEnvData(telemetry);
+        setSensorConnected(true);
+        setSensorError(null);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSensorConnected(false);
+
+        setSensorError(
+          error instanceof Error
+            ? error.message
+            : "Unable to connect to sensor backend.",
+        );
+      } finally {
+        if (isMounted) {
+          setSensorLoading(false);
+        }
       }
-    }, 3000);
+    };
+    const loadSecurityTelemetry = async () => {
+      try {
+        const telemetry = await fetchSecurityTelemetry();
 
-    return () => clearInterval(interval);
-  }, [activeScenario]);
+        if (!isMounted) {
+          return;
+        }
 
-  // Helper to log a new real-time event to stream
-  const logEvent = (category: AlertEvent['category'], severity: AlertEvent['severity'], message: string) => {
+        setSecurityData(telemetry);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        console.error("Failed to fetch security telemetry:", error);
+      }
+    };
+
+    // -------------------------------------------------------------------------
+    // EMERGENCY / SOS STATUS
+    // -------------------------------------------------------------------------
+
+    const loadEmergencyStatus = async () => {
+      try {
+        const emergency = await fetchEmergencyStatus();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSosActive(emergency.active);
+        setSosDetails(emergency.details);
+
+        // IMPORTANT:
+        // The backend is the source of truth for emergency state.
+        //
+        // When FastAPI says SOS is active, synchronize the
+        // UI emergency state as well.
+        setIsEmergencyActive(emergency.active);
+
+        // ---------------------------------------------------------------
+        // AUTOMATIC SOS BANNER
+        // ---------------------------------------------------------------
+
+        if (emergency.active && emergency.details) {
+          setCriticalBanner({
+            show: true,
+
+            title:
+              emergency.details.type === "AUTOMATIC"
+                ? "AUTOMATIC SOS TRIGGERED"
+                : "MANUAL SOS ACTIVE",
+
+            location: `DEVICE ${emergency.details.device_id}`,
+
+            details: emergency.details.reason,
+          });
+        }
+
+        // ---------------------------------------------------------------
+        // CLEAR BANNER WHEN EMERGENCY IS INACTIVE
+        // ---------------------------------------------------------------
+
+        if (!emergency.active) {
+          setCriticalBanner(null);
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        console.error("Failed to fetch emergency status:", error);
+      }
+    };
+
+    // -------------------------------------------------------------------------
+    // INITIAL FETCH
+    // -------------------------------------------------------------------------
+
+    loadEnvironmentTelemetry();
+    loadEmergencyStatus();
+    loadSecurityTelemetry();
+
+    // -------------------------------------------------------------------------
+    // POLL EVERY 2 SECONDS
+    // -------------------------------------------------------------------------
+
+    const intervalId = window.setInterval(() => {
+      loadEnvironmentTelemetry();
+      loadEmergencyStatus();
+      loadSecurityTelemetry();
+    }, 2000);
+
+    // -------------------------------------------------------------------------
+    // CLEANUP
+    // -------------------------------------------------------------------------
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // CAMERA CONTROLS
+  // ---------------------------------------------------------------------------
+
+  const handleToggleNightVision = () => {
+    setNightVision((previous) => {
+      const next = !previous;
+
+      if (next) {
+        setThermalMode(false);
+      }
+
+      return next;
+    });
+  };
+
+  const handleToggleThermalMode = () => {
+    setThermalMode((previous) => {
+      const next = !previous;
+
+      if (next) {
+        setNightVision(false);
+      }
+
+      return next;
+    });
+  };
+
+  const handleCycleZoom = () => {
+    setZoomLevel((previous) => {
+      if (previous === 1) return 1.5;
+      if (previous === 1.5) return 2.0;
+      return 1;
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // EVENT LOGGING
+  // ---------------------------------------------------------------------------
+
+  const logEvent = (
+    category: AlertEvent["category"],
+    severity: AlertEvent["severity"],
+    message: string,
+  ) => {
     const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const timeStr =
+      `${String(now.getHours()).padStart(2, "0")}:` +
+      `${String(now.getMinutes()).padStart(2, "0")}:` +
+      `${String(now.getSeconds()).padStart(2, "0")}`;
+
     const newEvent: AlertEvent = {
       id: `evt-${Date.now()}`,
       timestamp: timeStr,
@@ -134,278 +355,228 @@ export const Dashboard: React.FC = () => {
       message,
       acknowledged: false,
     };
-    setEventLogs((prev) => [newEvent, ...prev]);
+
+    setEventLogs((previous) => [newEvent, ...previous]);
   };
 
-  // Scenario Switcher Logic
-  const handleSelectScenario = (scenario: DemoScenario) => {
-    setActiveScenario(scenario);
+  // ---------------------------------------------------------------------------
+  // MCB BREAKER CONTROL
+  // ---------------------------------------------------------------------------
 
-    if (scenario === 'NOMINAL') {
+  const handleToggleBreaker = (id: string) => {
+    console.log(`[MCB CONTROL] Breaker control requested: ${id}`);
+
+    logEvent(
+      "MCB",
+      "INFO",
+      `Breaker control request received for ${id}. Hardware controller is not connected.`,
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // THEFT PROTECTION
+  // ---------------------------------------------------------------------------
+
+  const handleToggleTheftProtection = (armed: boolean) => {
+    setSecurityData((previous) => ({
+      ...previous,
+      theftProtectionArmed: armed,
+      intruderDetected: armed ? previous.intruderDetected : false,
+    }));
+
+    logEvent(
+      "SECURITY",
+      armed ? "SUCCESS" : "WARNING",
+      `Theft protection system ${armed ? "ARMED" : "DISARMED"}.`,
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // MANUAL SOS
+  // ---------------------------------------------------------------------------
+
+  const handleTriggerSos = async () => {
+    try {
+      const emergency = await triggerManualSOS();
+
+      setSosActive(emergency.active);
+      setSosDetails(emergency.details);
+      setIsEmergencyActive(emergency.active);
+
+      if (emergency.active) {
+        setCriticalBanner({
+          show: true,
+          title: "MANUAL SOS COMMAND TRIGGERED",
+          location: "CONTROL ROOM CONSOLE — OPERATOR OVERRIDE",
+          details:
+            emergency.details?.reason || "Manual emergency override requested.",
+        });
+      }
+
+      logEvent(
+        "EMERGENCY",
+        "CRITICAL",
+        "OPERATOR SOS: Manual emergency override button pressed.",
+      );
+    } catch (error) {
+      console.error("Failed to trigger manual SOS:", error);
+
+      logEvent("EMERGENCY", "WARNING", "OPERATOR SOS request failed.");
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // EMERGENCY RESET
+  // ---------------------------------------------------------------------------
+
+  const handleResetEmergency = async () => {
+    try {
+      await clearEmergency();
+
+      setSosActive(false);
+      setSosDetails(null);
       setIsEmergencyActive(false);
       setCriticalBanner(null);
-      setEnvData({ ...initialEnv });
-      setSecurityData({ ...initialSec });
-      setMcbDevices([...initialDevices]);
-      logEvent('SYSTEM', 'SUCCESS', 'System returned to nominal operating status.');
-    } else if (scenario === 'INTRUDER') {
-      setIsEmergencyActive(true);
-      setSecurityData((prev) => ({
-        ...prev,
-        theftProtectionArmed: true,
-        intruderDetected: true,
-        intruderLocation: 'SECTOR-02 PERIMETER (GATE 4)',
-        personDetected: 2,
-        personConfidence: 96,
-      }));
-      setCriticalBanner({
-        show: true,
-        title: 'SECURITY BREACH: INTRUDER DETECTED',
-        location: 'SECTOR-02 PERIMETER (GATE 4)',
-        confidence: 96,
-        details: 'Theft protection radar triggered unauthorized boundary crossing',
-      });
-      logEvent('SECURITY', 'CRITICAL', '🚨 INTRUDER ALERT: Theft protection trip in Sector-02 Perimeter.');
-    } else if (scenario === 'GAS_LEAK') {
-      setIsEmergencyActive(true);
-      setEnvData((prev) => ({
-        ...prev,
-        gas: 88.4,
-        gasStatus: 'CRITICAL',
-      }));
-      // Auto-trip non-critical breakers if setting enabled
-      if (settings.autoTripOnCriticalGas) {
-        setMcbDevices((prev) =>
-          prev.map((d) =>
-            d.id === 'MCB-02' || d.id === 'MCB-04'
-              ? { ...d, status: 'TRIPPED', switchState: false, tripReason: 'GAS HAZARD AUTO-INTERLOCK' }
-              : d
-          )
-        );
-      }
-      setCriticalBanner({
-        show: true,
-        title: 'CRITICAL EVENT: HAZARDOUS GAS LEAK DETECTED',
-        location: 'ELECTRICAL VAULT & SUBSTATION 04A',
-        details: 'Gas concentration 88.4%. Interlock isolation triggered.',
-      });
-      logEvent('EMERGENCY', 'CRITICAL', '🚨 DANGER: Flammable gas threshold breached (88.4%). Automated MCB interlock trip.');
-    } else if (scenario === 'FIRE_OUTBREAK') {
-      setIsEmergencyActive(true);
-      setEnvData((prev) => ({
-        ...prev,
-        temperature: 68.2,
-        temperatureStatus: 'CRITICAL',
-        fireStatus: 'EMERGENCY',
-        fireOpticalReading: 94,
-      }));
-      // Auto-trip main feeder if fire outbreak
-      if (settings.autoTripOnFire) {
-        setMcbDevices((prev) =>
-          prev.map((d) =>
-            d.id === 'MCB-01'
-              ? { ...d, status: 'TRIPPED', switchState: false, tripReason: 'FIRE FLAME TRIP' }
-              : d
-          )
-        );
-      }
-      setCriticalBanner({
-        show: true,
-        title: 'CRITICAL EVENT: THERMAL FIRE DETECTED',
-        location: 'MCB POWER VAULT & CHILLER BUS',
-        confidence: 94,
-        details: 'Thermal signature elevated to 68.2°C. Extinguisher armed.',
-      });
-      logEvent('EMERGENCY', 'CRITICAL', '🔥 FIRE OUTBREAK: Thermal level at 68.2°C. Main Feeder MCB-01 isolated.');
-    } else if (scenario === 'FIREARM_DETECTED') {
-      setIsEmergencyActive(true);
-      setSecurityData((prev) => ({
-        ...prev,
-        personDetected: 1,
-        firearmDetected: 1,
-        firearmConfidence: 91,
-      }));
-      setCriticalBanner({
-        show: true,
-        title: 'CRITICAL EVENT: FIREARM DETECTED',
-        location: 'CAM-01 MAIN ENTRANCE',
-        confidence: 91,
-        details: 'YOLOv8 CV weapon classification verified. Control room lockdown initiated.',
-      });
-      logEvent('SECURITY', 'CRITICAL', '🚨 WEAPON DETECTED: Firearm identified on CAM-01 (Confidence: 91%).');
+
+      logEvent("EMERGENCY", "SUCCESS", "Emergency state cleared by operator.");
+    } catch (error) {
+      console.error("Failed to clear emergency:", error);
+
+      logEvent("EMERGENCY", "WARNING", "Emergency reset request failed.");
     }
   };
 
-  // Toggle MCB Breaker switch
-  const handleToggleBreaker = (id: string) => {
-    setMcbDevices((prev) =>
-      prev.map((d) => {
-        if (d.id === id) {
-          const nextState = !d.switchState;
-          const nextStatus = nextState ? 'ONLINE' : 'OFFLINE';
-          logEvent('MCB', 'INFO', `Breaker ${d.id} (${d.name}) manually switched ${nextState ? 'CLOSED' : 'OPEN'}.`);
-          return {
-            ...d,
-            switchState: nextState,
-            status: nextStatus,
-            currentLoad: nextState ? (d.maxCapacity * 0.45) : 0,
-          };
-        }
-        return d;
-      })
-    );
-  };
+  // ---------------------------------------------------------------------------
+  // EXTINGUISHER
+  // ---------------------------------------------------------------------------
 
-  // Toggle Theft Protection Arming
-  const handleToggleTheftProtection = (armed: boolean) => {
-    setSecurityData((prev) => ({
-      ...prev,
-      theftProtectionArmed: armed,
-      intruderDetected: armed ? prev.intruderDetected : false,
-    }));
-    logEvent('SECURITY', armed ? 'SUCCESS' : 'WARNING', `Theft protection system ${armed ? 'ARMED' : 'DISARMED'}.`);
-  };
-
-  // Simulate Intruder Toggle from Theft panel
-  const handleSimulateIntruder = () => {
-    if (securityData.intruderDetected) {
-      setSecurityData((prev) => ({ ...prev, intruderDetected: false }));
-      if (activeScenario === 'INTRUDER') {
-        setIsEmergencyActive(false);
-        setCriticalBanner(null);
-        setActiveScenario('NOMINAL');
-      }
-      logEvent('SECURITY', 'SUCCESS', 'Theft perimeter radar cleared. Sector safe.');
-    } else {
-      handleSelectScenario('INTRUDER');
-    }
-  };
-
-  // Physical SOS Trigger
-  const handleTriggerSos = () => {
-    setIsEmergencyActive(true);
-    setCriticalBanner({
-      show: true,
-      title: 'MANUAL SOS COMMAND TRIGGERED',
-      location: 'CONTROL ROOM CONSOLE — OPERATOR OVERRIDE',
-      details: 'Facility-wide emergency evacuation alarm activated. Local demo control.',
-    });
-    logEvent('EMERGENCY', 'CRITICAL', '🆘 OPERATOR SOS: Manual emergency override button pressed.');
-  };
-
-  // Successful Extinguisher Discharge
   const handleExtinguisherSuccess = () => {
     setExtinguisherDischarged(true);
-    // Extinguish any fire and drop temperature
-    setEnvData((prev) => ({
-      ...prev,
-      fireStatus: 'SAFE',
-      fireOpticalReading: 0,
-      temperature: 28.5,
-      temperatureStatus: 'NORMAL',
-    }));
-    // Trip extinguisher MCB and Feeder
-    setMcbDevices((prev) =>
-      prev.map((d) =>
-        d.id === 'MCB-06' || d.id === 'MCB-01'
-          ? { ...d, switchState: false, status: 'TRIPPED', tripReason: 'EXTINGUISHER DISCHARGED' }
-          : d
-      )
+
+    logEvent(
+      "EMERGENCY",
+      "SUCCESS",
+      "Suppression actuation request authorized. Hardware actuator is awaiting integration.",
     );
-    // Add critical event
-    logEvent('EMERGENCY', 'SUCCESS', '🧯 SUPPRESSION COMPLETE: Clean-agent nitrogen canisters discharged. Fire hazard quenched.');
-    // Dismiss emergency banner if it was fire
-    if (activeScenario === 'FIRE_OUTBREAK') {
-      setTimeout(() => {
-        setIsEmergencyActive(false);
-        setCriticalBanner(null);
-        setActiveScenario('NOMINAL');
-      }, 3000);
-    }
+
+    setIsEmergencyActive(false);
+    setCriticalBanner(null);
   };
 
-  // Acknowledge alert event
+  // ---------------------------------------------------------------------------
+  // ALERT CONTROLS
+  // ---------------------------------------------------------------------------
+
   const handleAcknowledgeEvent = (id: string) => {
-    setEventLogs((prev) =>
-      prev.map((evt) => (evt.id === id ? { ...evt, acknowledged: true } : evt))
+    setEventLogs((previous) =>
+      previous.map((event) =>
+        event.id === id
+          ? {
+              ...event,
+              acknowledged: true,
+            }
+          : event,
+      ),
     );
   };
 
   const handleClearAcknowledged = () => {
-    setEventLogs((prev) => prev.filter((evt) => !evt.acknowledged));
+    setEventLogs((previous) => previous.filter((event) => !event.acknowledged));
   };
 
-  // Count unread
-  const unreadCount = eventLogs.filter((evt) => !evt.acknowledged).length;
+  const unreadCount = eventLogs.filter((event) => !event.acknowledged).length;
+
+  // ---------------------------------------------------------------------------
+  // RENDER
+  // ---------------------------------------------------------------------------
 
   return (
-    <div 
+    <div
       id="smart-mcb-command-center-root"
       className={`min-h-screen flex flex-col bg-[#06090e] text-zinc-100 ${
-        isEmergencyActive ? 'emergency-active' : ''
+        isEmergencyActive ? "emergency-active" : ""
       }`}
     >
-      {/* Top Command Bar */}
+      {/* ------------------------------------------------------------------- */}
+      {/* TOP COMMAND BAR                                                     */}
+      {/* ------------------------------------------------------------------- */}
+
       <TopCommandBar
         onOpenSettings={() => setIsSettingsOpen(true)}
         isEmergencyActive={isEmergencyActive}
-        activeScenarioName={activeScenario}
-        onResetEmergency={() => handleSelectScenario('NOMINAL')}
+        activeScenarioName="LIVE"
+        onResetEmergency={handleResetEmergency}
       />
 
-      {/* Interactive Scenario Demonstration Bar */}
-      <SimulationBar
-        activeScenario={activeScenario}
-        onSelectScenario={handleSelectScenario}
-        onReset={() => handleSelectScenario('NOMINAL')}
-      />
+      {/* ------------------------------------------------------------------- */}
+      {/* SENSOR CONNECTION STATUS                                            */}
+      {/* ------------------------------------------------------------------- */}
 
-      {/* Critical Alert Override Banner (Visible when emergency is triggered) */}
+      {sensorError && (
+        <div className="mx-3 mt-3 sm:mx-4">
+          <div className="border border-amber-900/60 bg-amber-950/20 px-3 py-2 rounded-xs font-mono text-[10px] text-amber-400 uppercase tracking-wider">
+            SENSOR TELEMETRY OFFLINE — FASTAPI/MQTT DATA UNAVAILABLE
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* CRITICAL ALERT BANNER                                                */}
+      {/* ------------------------------------------------------------------- */}
+
       {criticalBanner?.show && (
         <CriticalAlertBanner
           title={criticalBanner.title}
           location={criticalBanner.location}
           confidence={criticalBanner.confidence}
           details={criticalBanner.details}
-          onViewCamera={() => setActiveNav('security')}
+          onViewCamera={() => setActiveNav("security")}
           onDismiss={() => {
+            // Dismissing the visual banner does NOT
+            // clear the backend SOS state.
+            //
+            // The emergency remains active until
+            // the operator resets it.
             setCriticalBanner(null);
-            setIsEmergencyActive(false);
           }}
         />
       )}
 
-      {/* Main Workspace Body with Left Navigation + Content Area */}
+      {/* ------------------------------------------------------------------- */}
+      {/* MAIN WORKSPACE                                                       */}
+      {/* ------------------------------------------------------------------- */}
+
       <div className="flex-1 flex overflow-hidden">
-        
-        {/* Left Narrow Technical Navigation */}
+        {/* LEFT NAVIGATION */}
+
         <LeftNavigation
           activeSection={activeNav}
           onSelectSection={(section) => {
-            if (section === 'settings') {
+            if (section === "settings") {
               setIsSettingsOpen(true);
             } else {
               setActiveNav(section);
             }
           }}
           unreadAlertCount={unreadCount}
-          systemHealthPercent={99.8}
+          systemHealthPercent={sensorConnected ? 100 : 0}
         />
 
-        {/* Central Dynamic Content Area */}
-        <main 
+        {/* CONTENT */}
+
+        <main
           id="command-workspace-content"
           className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-tech-grid"
         >
-          
-          {/* OVERVIEW / DEFAULT COMMAND CENTER COMPOSITION */}
-          {activeNav === 'overview' && (
+          {/* =============================================================== */}
+          {/* OVERVIEW                                                         */}
+          {/* =============================================================== */}
+
+          {activeNav === "overview" && (
             <div className="space-y-4">
-              
-              {/* UPPER SECTION: Hero Security Camera (Pure Feed + Scan) + Environmental Core Side-by-Side on Desktop */}
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-                
-                {/* Left 7 Columns: Clean Camera Viewport with Live Scan (Zero Clutter, Zero Details) */}
+                {/* CAMERA */}
+
                 <div className="xl:col-span-7">
                   <CameraViewport
                     security={securityData}
@@ -418,11 +589,14 @@ export const Dashboard: React.FC = () => {
                   />
                 </div>
 
-                {/* Right 5 Columns: Environmental Core & Emergency Controls (SOS Only) */}
+                {/* ENVIRONMENT + SOS */}
+
                 <div className="xl:col-span-5 space-y-3">
-                  <EnvironmentalCore environment={envData} />
-                  
-                  {/* Emergency Controls (Manual System SOS Only on Overview) */}
+                  <EnvironmentalCore
+                    environment={envData}
+                    settings={settings}
+                  />
+
                   <EmergencyControlPanel
                     onTriggerSos={handleTriggerSos}
                     isEmergencyActive={isEmergencyActive}
@@ -430,16 +604,16 @@ export const Dashboard: React.FC = () => {
                     showSos={true}
                   />
                 </div>
-
               </div>
-
             </div>
           )}
 
-          {/* SECURITY FOCUSED VIEW - Comprehensive Security Command Center */}
-          {activeNav === 'security' && (
+          {/* =============================================================== */}
+          {/* SECURITY                                                         */}
+          {/* =============================================================== */}
+
+          {activeNav === "security" && (
             <div className="space-y-4">
-              {/* Camera Feed Viewport */}
               <CameraViewport
                 security={securityData}
                 currentTime={envData.lastUpdated}
@@ -450,7 +624,6 @@ export const Dashboard: React.FC = () => {
                 zoomLevel={zoomLevel}
               />
 
-              {/* Dedicated Camera Specifications, Optical Controls & Streaming Telemetry Section */}
               <CameraDetailsPanel
                 security={securityData}
                 activeCam={activeCam}
@@ -463,19 +636,23 @@ export const Dashboard: React.FC = () => {
                 onCycleZoom={handleCycleZoom}
               />
 
-              {/* Detection HUD & Security Controls */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <div className="lg:col-span-6 space-y-3">
                   <DetectionHud security={securityData} />
+
                   <TheftProtectionPanel
                     security={securityData}
                     onToggleTheftProtection={handleToggleTheftProtection}
-                    onSimulateIntruderToggle={handleSimulateIntruder}
                   />
                 </div>
+
                 <div className="lg:col-span-6">
                   <AlertStream
-                    events={eventLogs.filter(e => e.type === 'FIREARM' || e.type === 'INTRUSION' || e.type === 'SECURITY' || e.type === 'EMERGENCY')}
+                    events={eventLogs.filter(
+                      (event) =>
+                        event.category === "SECURITY" ||
+                        event.category === "EMERGENCY",
+                    )}
                     onAcknowledge={handleAcknowledgeEvent}
                     onClearAcknowledged={handleClearAcknowledged}
                   />
@@ -484,17 +661,26 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* ENVIRONMENT FOCUSED VIEW */}
-          {activeNav === 'environment' && (
+          {/* =============================================================== */}
+          {/* ENVIRONMENT                                                      */}
+          {/* =============================================================== */}
+
+          {activeNav === "environment" && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
                 <div className="xl:col-span-7">
-                  <EnvironmentalCore environment={envData} />
+                  <EnvironmentalCore
+                    environment={envData}
+                    settings={settings}
+                  />
                 </div>
+
                 <div className="xl:col-span-5">
                   <EmergencyControlPanel
                     onTriggerSos={handleTriggerSos}
-                    onOpenExtinguisherModal={() => setIsExtinguisherModalOpen(true)}
+                    onOpenExtinguisherModal={() =>
+                      setIsExtinguisherModalOpen(true)
+                    }
                     isEmergencyActive={isEmergencyActive}
                     extinguisherDischarged={extinguisherDischarged}
                     showExtinguisher={true}
@@ -503,16 +689,20 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              <LiveSensorGraph 
-                data={sensorHistory} 
-                currentTemp={envData.temperature} 
-                currentGas={envData.gas} 
+              <LiveSensorGraph
+                data={sensorHistory}
+                currentTemp={envData.temperature}
+                currentGas={envData.gas}
+                gasUnit={envData.gasUnit}
               />
             </div>
           )}
 
-          {/* ALERTS / EVENT STREAM FULL VIEW */}
-          {activeNav === 'alerts' && (
+          {/* =============================================================== */}
+          {/* ALERTS                                                           */}
+          {/* =============================================================== */}
+
+          {activeNav === "alerts" && (
             <div className="space-y-4">
               <AlertStream
                 events={eventLogs}
@@ -522,36 +712,47 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* DEVICES / MCB MATRIX FULL VIEW */}
-          {activeNav === 'devices' && (
+          {/* =============================================================== */}
+          {/* DEVICES                                                          */}
+          {/* =============================================================== */}
+
+          {activeNav === "devices" && (
             <div className="space-y-4">
               <McbNetworkTopology
                 devices={mcbDevices}
                 onToggleBreaker={handleToggleBreaker}
               />
+
               <ElectricalMetrics metrics={powerMetrics} />
             </div>
           )}
 
-          {/* POWER & ELECTRICAL SUB-METERING FULL VIEW */}
-          {activeNav === 'power' && (
+          {/* =============================================================== */}
+          {/* POWER                                                            */}
+          {/* =============================================================== */}
+
+          {activeNav === "power" && (
             <div className="space-y-4">
               <div className="bg-[#090d14] border border-zinc-800 p-3.5 rounded-xs font-mono text-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-display-tech font-bold text-white uppercase tracking-wider flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+
                     <span>ELECTRICAL POWER TELEMETRY & SUB-METERING</span>
                   </div>
+
                   <div className="text-zinc-400 mt-0.5 text-[11px]">
-                    Real-time 3-phase load profiling, active/reactive power metrics, and harmonic power factor diagnostics.
+                    Electrical telemetry interface. Awaiting live hardware data.
                   </div>
                 </div>
+
                 <div className="flex items-center gap-2 text-[10px]">
                   <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded-xs text-cyan-300 font-bold">
                     MAIN FEEDER BUS 01
                   </span>
-                  <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded-xs text-emerald-400 font-bold">
-                    ONLINE • 50.0 Hz
+
+                  <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded-xs text-zinc-400 font-bold">
+                    TELEMETRY STANDBY
                   </span>
                 </div>
               </div>
@@ -565,20 +766,27 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* HISTORY AUDIT VIEW */}
-          {activeNav === 'history' && (
+          {/* =============================================================== */}
+          {/* HISTORY                                                          */}
+          {/* =============================================================== */}
+
+          {activeNav === "history" && (
             <div className="space-y-4">
               <div className="bg-[#080d14] border border-zinc-800 p-4 rounded-sm font-mono text-xs">
                 <div className="text-sm font-display-tech font-bold text-white uppercase mb-2">
                   HISTORICAL TELEMETRY AUDIT LOG
                 </div>
+
                 <div className="text-zinc-400 mb-4">
-                  Substation 04A non-volatile sensor telemetry archived over 24-hour cycle.
+                  Historical sensor telemetry interface. Awaiting persistent
+                  backend storage.
                 </div>
-                <LiveSensorGraph 
-                  data={sensorHistory} 
-                  currentTemp={envData.temperature} 
-                  currentGas={envData.gas} 
+
+                <LiveSensorGraph
+                  data={sensorHistory}
+                  currentTemp={envData.temperature}
+                  currentGas={envData.gas}
+                  gasUnit={envData.gasUnit}
                 />
               </div>
 
@@ -589,14 +797,19 @@ export const Dashboard: React.FC = () => {
               />
             </div>
           )}
-
         </main>
       </div>
 
-      {/* Bottom Industrial System Health Strip */}
+      {/* ------------------------------------------------------------------- */}
+      {/* SYSTEM HEALTH                                                       */}
+      {/* ------------------------------------------------------------------- */}
+
       <SystemHealthStrip items={healthItems} />
 
-      {/* Extinguisher PIN Authorization Modal */}
+      {/* ------------------------------------------------------------------- */}
+      {/* EXTINGUISHER MODAL                                                  */}
+      {/* ------------------------------------------------------------------- */}
+
       <ExtinguisherModal
         isOpen={isExtinguisherModalOpen}
         onClose={() => setIsExtinguisherModalOpen(false)}
@@ -604,17 +817,24 @@ export const Dashboard: React.FC = () => {
         correctPin={settings.extinguisherPin}
       />
 
-      {/* Settings Calibration Modal */}
+      {/* ------------------------------------------------------------------- */}
+      {/* SETTINGS                                                            */}
+      {/* ------------------------------------------------------------------- */}
+
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onSaveSettings={(updated) => {
           setSettings(updated);
-          logEvent('SYSTEM', 'SUCCESS', 'Facility calibration parameters updated.');
+
+          logEvent(
+            "SYSTEM",
+            "SUCCESS",
+            "Facility calibration parameters updated.",
+          );
         }}
       />
-
     </div>
   );
 };

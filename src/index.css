@@ -155,6 +155,8 @@
 }
 ::-webkit-scrollbar-thumb {
   background: #1e293b;
+
+  
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {

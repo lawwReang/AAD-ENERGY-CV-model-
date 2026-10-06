@@ -19,7 +19,7 @@ export interface EnvironmentData {
   gasStatus: 'NORMAL' | 'WARNING' | 'CRITICAL';
   humidity: number;
   humidityUnit: string;
-  humidityStatus: 'NORMAL' | 'WARNING';
+  humidityStatus: 'NORMAL' | 'WARNING' | 'CRITICAL';
   fireStatus: 'SAFE' | 'EMERGENCY';
   fireOpticalReading: number; // 0-100%
   lastUpdated: string;
@@ -40,7 +40,7 @@ export interface McbDevice {
   circuit: string;
   status: 'ONLINE' | 'OFFLINE' | 'TRIPPED';
   switchState: boolean; // on or off
-  currentLoad: number; // in Amperes
+  currentLoad: number; // in Amperese
   maxCapacity: number; // in Amperes
   temperature: number; // °C
   connectedTo: string;
@@ -49,17 +49,22 @@ export interface McbDevice {
 }
 
 export interface SecurityStatus {
-  cameraStatus: 'ONLINE' | 'STANDBY' | 'OFFLINE';
+  cameraStatus: "ONLINE" | "STANDBY" | "OFFLINE";
   fps: number;
   activeCameraId: string;
+
   personDetected: number;
-  firearmDetected: number;
-  firearmConfidence: number;
+  knifeDetected: number;
+
   personConfidence: number;
+  knifeConfidence: number;
+
   theftProtectionArmed: boolean;
+
   intruderDetected: boolean;
   intruderLocation?: string;
-  cvEngineStatus: 'ACTIVE' | 'STANDBY' | 'DEGRADED';
+
+  cvEngineStatus: "ACTIVE" | "STANDBY" | "DEGRADED";
 }
 
 export interface SystemHealthItem {
